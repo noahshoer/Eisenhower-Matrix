@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eisenhower Matrix</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .matrix {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            width: 80%;
+            max-width: 900px;
+        }
+
+        .quadrant {
+            background-color: white;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .quadrant h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .quadrant ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .quadrant li {
+            background-color: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .urgent {
+            border-top: 5px solid #e63946;
+        }
+
+        .not-urgent {
+            border-top: 5px solid #2a9d8f;
+        }
+
+        .important {
+            border-left: 5px solid #264653;
+        }
+
+        .not-important {
+            border-left: 5px solid #f4a261;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="matrix">
+        <div class="quadrant urgent important">
+            <h2>Urgent & Important</h2>
+            <ul>
+                <li>Finish project report</li>
+                <li>Respond to client emails</li>
+            </ul>
+        </div>
+
+        <div class="quadrant not-urgent important">
+            <h2>Not Urgent & Important</h2>
+            <ul>
+                <li>Plan personal development</li>
+                <li>Exercise</li>
+            </ul>
+        </div>
+
+        <div class="quadrant urgent not-important">
+            <h2>Urgent & Not Important</h2>
+            <ul>
+                <li>Some meeting invitations</li>
+                <li>Minor requests</li>
+            </ul>
+        </div>
+
+        <div class="quadrant not-urgent not-important">
+            <h2>Not Urgent & Not Important</h2>
+            <ul>
+                <li>Social media scrolling</li>
+                <li>Watching random videos</li>
+            </ul>
+        </div>
+    </div>
+
+</body>
+</html>

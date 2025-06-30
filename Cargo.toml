@@ -1,0 +1,15 @@
+[package]
+name = "eisenmatrix"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+resolver = "3"
+
+
+[alias]
+build = "clippy"
+
+[dependencies]
+serial_test = "3.2.0"
+
