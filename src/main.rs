@@ -1,5 +1,6 @@
 use eisenmatrix::connection::run;
 
-fn main() -> std::io::Result<()> {
-    run()
+#[tokio::main]
+async fn main() {
+    run().await;
 }

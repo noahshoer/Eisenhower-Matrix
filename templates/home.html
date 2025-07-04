@@ -78,32 +78,36 @@
         <div class="quadrant urgent important">
             <h2>Urgent & Important</h2>
             <ul>
-                <li>Finish project report</li>
-                <li>Respond to client emails</li>
+            {% for task in tasks if task.urgent && task.important %}
+                <li>{{ task.description }}</li>
+            {% endfor %}
             </ul>
         </div>
 
         <div class="quadrant not-urgent important">
             <h2>Not Urgent & Important</h2>
             <ul>
-                <li>Plan personal development</li>
-                <li>Exercise</li>
+            {% for task in tasks if !task.urgent && task.important %}
+                <li>{{ task.description }}</li>
+            {% endfor %}
             </ul>
         </div>
 
         <div class="quadrant urgent not-important">
             <h2>Urgent & Not Important</h2>
             <ul>
-                <li>Some meeting invitations</li>
-                <li>Minor requests</li>
+            {% for task in tasks if task.urgent && !task.important %}
+                <li>{{ task.description }}</li>
+            {% endfor %}
             </ul>
         </div>
 
         <div class="quadrant not-urgent not-important">
             <h2>Not Urgent & Not Important</h2>
             <ul>
-                <li>Social media scrolling</li>
-                <li>Watching random videos</li>
+            {% for task in tasks if !task.urgent && !task.important %}
+                <li>{{ task.description }}</li>
+            {% endfor %}
             </ul>
         </div>
     </div>

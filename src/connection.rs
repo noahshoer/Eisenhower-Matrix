@@ -1,188 +1,68 @@
-use crate::processes::ThreadPool;
-use crate::response::send_response;
-use crate::status::StatusCode;
+use askama::Template;
+use axum::{extract::State, response::{Html, IntoResponse}, routing::get, Router};
+use axum::http::StatusCode;
+use tokio::net::TcpListener;
+use sqlx::{FromRow, Pool};
+use std::{fs, net::SocketAddr};
 
-use std::net::{TcpListener, TcpStream};
-
-use std::fs::{self};
-use std::io::{BufRead, BufReader};
-
-
-
-pub fn run() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:7878")?;
-    let pool = ThreadPool::new(4);
-
-    for stream_result in listener.incoming() {
-        let stream = match stream_result {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Failed to establish a connection {e}");
-                continue;
-            }
-        };
-
-        pool.execute(|| {
-            handle_connection(stream);
-        });
-    }
-
-    Ok(())
+#[derive(Debug, FromRow)]
+pub struct Task {
+    pub id: i64,
+    pub description: String,
+    pub urgent: bool,
+    pub important: bool,
 }
 
-/// Maps a parsed request string (e.g., "GET /") to a filename.
-/// Returns Some(filename) if the route is known, or None for 404.
-fn resolve_filename(parsed_request: &str) -> Option<&'static str> {
-    match parsed_request {
-        "GET /" => Some("home.html"),
-        // Add more routes here as needed
-        _ => None,
+#[derive(Template)]
+#[template(path = "home.html")]
+pub struct HomeTemplate<'a> {
+    pub tasks: &'a [Task],
+}
+
+pub async fn run() {
+    let pool = Pool::connect("sqlite://tasks.db").await.unwrap();
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+
+    let app = Router::new()
+        .route("/", get(home_handler))
+        .fallback(not_found_handler)
+        .with_state(pool.clone());
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
+    println!("Listening on http://{}", addr);
+    let listener = TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app.into_make_service())
+        .await
+        .unwrap();
+}
+
+async fn home_handler(
+    State(pool): State<Pool<sqlx::Sqlite>>,
+) -> impl IntoResponse {
+    let tasks = sqlx::query_as::<_, Task>(
+        "SELECT id, description, urgent, important FROM tasks"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_else(|_| vec![]);
+
+    let template = HomeTemplate { tasks: &tasks };
+    match template.render() {
+        Ok(contents) => Html(contents).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error"
+        ).into_response(),
     }
 }
 
-fn handle_connection(stream: TcpStream) {
-    let buf_reader = BufReader::new(&stream);
-    let request_line = match buf_reader.lines().next() {
-        Some(Ok(line)) => line,
-        _ => {
-            send_response(stream, StatusCode::BadRequest, "");
-            return;
-        }
-    };
-
-    let filename = match parse_request(&request_line).and_then(|parsed| resolve_filename(&parsed)) {
-        Some(f) => f,
-        None => {
-            send_response(stream, StatusCode::NotFound, "");
-            return;
-        }
-    };
-
-    let contents = match fs::read_to_string(filename) {
-        Ok(c) => c,
-        Err(_) => {
-            send_response(stream, StatusCode::InternalServerError, "");
-            return;
-        }
-    };
-
-    send_response(stream, StatusCode::Ok, contents);
-}
-
-fn parse_request(request: &str) -> Option<String> {
-    let mut parts = request.split_whitespace();
-    let method = parts.next()?;
-    let uri = parts.next()?;
-
-    if let Some(ver) = parts.next() {
-        if ver == "HTTP/1.1" {
-            return Some([method, uri].join(" "));
-        }
-    }
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{io::{Read, Write}, thread};
-
-    use super::*;
-
-    fn assert_buffer(buffer: &str, expected: &str) {
-        assert!(buffer.contains(expected), "Response was: {}", buffer);
-    }
-
-    #[test]
-    fn test_resolve_filename() {
-        assert_eq!(resolve_filename("GET /"), Some("home.html"));
-        assert_eq!(resolve_filename("GET /notfound"), None);
-        assert_eq!(resolve_filename("POST /"), None);
-    }
-
-
-    #[test]
-    fn test_parse_request_valid() {
-        let req = "GET / HTTP/1.1";
-        assert_eq!(parse_request(req), Some("GET /".to_owned()));
-    }
-
-    #[test]
-    fn test_parse_request_invalid_version() {
-        let req = "GET / HTTP/2.0";
-        assert_eq!(parse_request(req), None);
-    }
-
-    #[test]
-    fn test_parse_request_incomplete() {
-        let req = "GET /";
-        assert_eq!(parse_request(req), None);
-    }
-
-    #[test]
-    fn test_parse_request_empty() {
-        let req = "";
-        assert_eq!(parse_request(req), None);
-    }
-
-    #[test]
-    fn test_handle_connection_not_found() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        thread::spawn(move || {
-            if let Ok((stream, _)) = listener.accept() {
-                handle_connection(stream);
-            }
-        });
-
-        let mut stream = TcpStream::connect(addr).unwrap();
-        let request = b"GET /notfound HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        stream.write_all(request).unwrap();
-
-        let mut buffer = String::new();
-        stream.read_to_string(&mut buffer).unwrap();
-        assert_buffer(&buffer, "HTTP/1.1 404 NOT FOUND");
-    }
-
-    #[test]
-    fn test_handle_connection_bad_request() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        thread::spawn(move || {
-            if let Ok((stream, _)) = listener.accept() {
-                handle_connection(stream);
-            }
-        });
-
-        let mut stream = TcpStream::connect(addr).unwrap();
-        let _ = stream.shutdown(std::net::Shutdown::Write);
-
-        let mut buffer = String::new();
-        stream.read_to_string(&mut buffer).unwrap();
-        assert_buffer(&buffer, "HTTP/1.1 400 BAD REQUEST");
-    }
-
-    #[serial_test::serial]
-    #[test]
-    fn test_handle_connection_internal_server_error() {
-        let temp_dir = std::env::temp_dir();
-        std::env::set_current_dir(&temp_dir).unwrap();
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        thread::spawn(move || {
-            if let Ok((stream, _)) = listener.accept() {
-                handle_connection(stream);
-            }
-        });
-
-        let mut stream = TcpStream::connect(addr).unwrap();
-        let request = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        stream.write_all(request).unwrap();
-
-        let mut buffer = String::new();
-        stream.read_to_string(&mut buffer).unwrap();
-        assert_buffer(&buffer, "HTTP/1.1 500 INTERNAL SERVER ERROR");
+async fn not_found_handler() -> impl IntoResponse {
+    match fs::read_to_string("404.html") {
+        Ok(contents) => Html(contents).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error"
+        ).into_response(),
     }
 }
+

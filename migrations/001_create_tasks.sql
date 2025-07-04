@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT NOT NULL,
+    urgent BOOLEAN NOT NULL,
+    important BOOLEAN NOT NULL
+);
